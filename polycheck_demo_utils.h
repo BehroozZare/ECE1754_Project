@@ -4,141 +4,186 @@
 
 #ifndef PROJECT_POLYCHECK_DEMO_UTILS_H
 #define PROJECT_POLYCHECK_DEMO_UTILS_H
+
 #include <rose.h>
+#include <AstInterface_ROSE.h>
 #include <vector>
 #include <string>
 #include <variant>
 
-/*
- * Given an SgExpression, it will print the expression in a code like manner
- * It is useful for debugging and SgExpression comparison
- */
-class PrintStatement: public AstSimpleProcessing{
-public:
 
-private:
+//easy debugging stuff
+#ifndef NDEBUG
+#define D(x) x
+#else
+#define D(x)
+#endif
 
-};
+namespace polycheckdemo{
 
-
-
-
-//=========================== Original Schedule Classes ==================================
-
-//This class is going to be attached to each node
-class OriginalScheduleAttribute: public AstAttribute {
-private:
-    //An struct that is used as element of Original Schedule
-    struct schedule_element {
-        schedule_element(){
-            type = "Nothing";
-            order = 0;
-            loop_invariant = "N";
-        }
-        std::string type;
-        int order;
-        std::string loop_invariant;
+    //Class for Printing subscript
+    class PrintSubscripts: public AstBottomUpProcessing<std::string>
+    {
+    public:
+        PrintSubscripts();
+        std::string evaluateSynthesizedAttribute(SgNode* node, SynthesizedAttributesList child_att) override;
+    private:
     };
-    std::vector<schedule_element> original_schedule;
 
-public:
-    explicit OriginalScheduleAttribute(std::vector<schedule_element> org_schedule){
-        this->original_schedule = org_schedule;
-    }
-
-    OriginalScheduleAttribute() = default;
-    //@brief get a reference to the original schedule of the expression
-    std::vector<schedule_element>& getOriginalSchedule(){
-        return this->original_schedule;
-    }
-    void push_back(int input){
-        schedule_element x;
-        original_schedule.push_back(x);
-        original_schedule.back().order = input;
-        original_schedule.back().type = "int";
-    }
-
-    void push_back(std::string input){
-        schedule_element x;
-        original_schedule.push_back(x);
-        original_schedule.back().loop_invariant = input;
-        original_schedule.back().type = "string";
-    }
-
-    std::string get_type(int index){
-        if(index >= original_schedule.size()){
-            std::cout << "Index is out of bound" << std::endl;
-        }
-        return original_schedule[index].type;
-    }
+    //Class for Printing subscript
+    class PrintStatement: public AstBottomUpProcessing<std::string>
+    {
+    public:
+        PrintStatement();
+        std::string evaluateSynthesizedAttribute(SgNode* node, SynthesizedAttributesList child_att) override;
+    private:
+    };
 
 
-    std::string get_str(int index){
-        if(index >= original_schedule.size()){
-            std::cout << "Index is out of bound" << std::endl;
-            return " ";
-        } else if(original_schedule[index].type != "string") {
-            std::cout << "The type is not string" << std::endl;
-            return " ";
-        }
-        return original_schedule[index].loop_invariant;
-    }
-
-    int get_int(int index){
-        if(index >= original_schedule.size()){
-            std::cout << "Index is out of bound" << std::endl;
-            return -1;
-        } else if(original_schedule[index].type != "int") {
-            std::cout << "The type is not int" << std::endl;
-            return -1;
-        }
-        return original_schedule[index].order;
-    }
-
-    void print_schedule(){
-        std::cout << "<";
-        for(int i = 0; i < this->original_schedule.size() - 1; i++) {
-            if (this->get_type(i) == "string") {
-                std::cout << this->get_str(i) << ", ";
-            } else {
-                std::cout << this->get_int(i) << ", ";
+    //=========================== Original Schedule Classes ==================================
+    //@brief This class is going to be attached to each node
+    class OriginalScheduleAttribute: public AstAttribute {
+    private:
+        //@brief An struct that is used as element of Original Schedule
+        struct schedule_element {
+            schedule_element(){
+                type = "Nothing";
+                order = 0;
+                loop_invariant = "N";
             }
+            std::string type;
+            int order;
+            std::string loop_invariant;
+        };
+        std::vector<schedule_element> original_schedule;
+
+    public:
+        explicit OriginalScheduleAttribute(std::vector<schedule_element> org_schedule){
+            this->original_schedule = org_schedule;
         }
-        if(this->get_type(this->original_schedule.size() - 1) == "string"){
-            std::cout << this->get_str(this->original_schedule.size() - 1 );
-        } else {
-            std::cout << this->get_int(this->original_schedule.size() - 1);
+
+        OriginalScheduleAttribute() = default;
+        //@brief get a reference to the original schedule of the expression
+        std::vector<schedule_element>& getOriginalSchedule(){
+            return this->original_schedule;
         }
-        std::cout <<">";
-    }
-};
 
-//This class attaches the attribute (original schedule) to each SgExprStatement node
-//That is the head of an expression (please note the "if(isSgBasicBlock(node->get_parent()) != nullptr)")
-class OriginalScheduleAttacher: public AstTopDownProcessing<OriginalScheduleAttribute>{
-public:
-    OriginalScheduleAttacher();
-    //@brief process the AST in preorder and call this function on each node
-    //@output the inherit function will be return at each node call and it
-    //will use this value to call the children of the current node.
-    virtual OriginalScheduleAttribute  evaluateInheritedAttribute(SgNode* astNode, OriginalScheduleAttribute inherit);
-private:
-    int num_expressions;
-};
+        /*
+         * @brief A wrapper function function for push_back like behaviour in std::vector for
+         * the original schedule
+         */
+        void push_back(int input){
+            schedule_element x;
+            original_schedule.push_back(x);
+            original_schedule.back().order = input;
+            original_schedule.back().type = "int";
+        }
 
+        /*
+         * @brief A wrapper function function for push_back like behaviour in std::vector for
+         * the original schedule
+         */
+        void push_back(std::string input){
+            schedule_element x;
+            original_schedule.push_back(x);
+            original_schedule.back().loop_invariant = input;
+            original_schedule.back().type = "string";
+        }
 
+        /*
+         * @brief This function return the type of the current element
+         * (string or int) in the original schedule vector
+         */
+        std::string get_type(int index){
+            if(index >= original_schedule.size()){
+                std::cout << "Index is out of bound" << std::endl;
+            }
+            return original_schedule[index].type;
+        }
 
-//================================= Helper Function ========================================
+        /*
+         * @brief if the element in the original schedule is string, it will return it
+         */
+        std::string get_str(int index){
+            if(index >= original_schedule.size()){
+                std::cout << "Index is out of bound" << std::endl;
+                return " ";
+            } else if(original_schedule[index].type != "string") {
+                std::cout << "The type is not string" << std::endl;
+                return " ";
+            }
+            return original_schedule[index].loop_invariant;
+        }
 
-void attachOriginalSchedule(SgProject* project){
-    OriginalScheduleAttacher org_attacher;
-    OriginalScheduleAttribute inherit;
-    org_attacher.traverseInputFiles(project, inherit);
+        /*
+         * @brief if the element in the original schedule is int, it will return it
+         */
+        int get_int(int index){
+            if(index >= original_schedule.size()){
+                std::cout << "Index is out of bound" << std::endl;
+                return -1;
+            } else if(original_schedule[index].type != "int") {
+                std::cout << "The type is not int" << std::endl;
+                return -1;
+            }
+            return original_schedule[index].order;
+        }
+
+        /*
+         * @brief print the original schedule e.g <1,i,j>
+         */
+        void print_schedule(){
+            std::cout << "<";
+            for(int i = 0; i < this->original_schedule.size() - 1; i++) {
+                if (this->get_type(i) == "string") {
+                    std::cout << this->get_str(i) << ", ";
+                } else {
+                    std::cout << this->get_int(i) << ", ";
+                }
+            }
+            if(this->get_type(this->original_schedule.size() - 1) == "string"){
+                std::cout << this->get_str(this->original_schedule.size() - 1 );
+            } else {
+                std::cout << this->get_int(this->original_schedule.size() - 1);
+            }
+            std::cout <<">";
+        }
+
+    };
+
+    //@brief This class attaches the attribute (original schedule) to each SgExprStatement node
+    //That is the head of an expression (please note the "if(isSgBasicBlock(node->get_parent()) != nullptr)")
+    class OriginalScheduleAttacher: public AstTopDownProcessing<OriginalScheduleAttribute>{
+    public:
+        OriginalScheduleAttacher();
+        //@brief process the AST in preorder and call this function on each node
+        //@output the inherit function will be return at each node call and it
+        //will use this value to call the children of the current node.
+        OriginalScheduleAttribute evaluateInheritedAttribute(SgNode* astNode, OriginalScheduleAttribute inherit) override;
+
+        //@brief check whether the schedule is computed or not
+        bool isScheduleComputed() const{
+            return schedule_computed;
+        }
+    private:
+        int num_expressions;
+        bool schedule_computed;
+    };
+    //================================= Helper Function ========================================
+    /*
+     * @brief Given the project root node, it will drive the
+     * original schedule and attach the schedule of each statement
+     * into the node
+     */
+    void attachOriginalSchedule(SgProject* project);
+
+    /*
+     * A function to print statements in the following form
+     * wref, readref, etc.
+     */
+    void printStatements(SgProject* project);
 }
 
-bool compareInputAndOutPutStatements(){
-    return false;
-}
 
 
 #endif //PROJECT_POLYCHECK_DEMO_UTILS_H

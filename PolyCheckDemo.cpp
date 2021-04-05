@@ -8,9 +8,7 @@
 
 #include "rose.h"
 #include <iostream>
-#include <string>
 #include "polycheck_demo_utils.h"
-
 
 
 int main(int argc, char *argv[])
@@ -19,18 +17,19 @@ int main(int argc, char *argv[])
 
 
     // Build a project
-    SgProject *OrgCode = frontend(argc, argv);
-    ROSE_ASSERT(OrgCode != nullptr);
+    SgProject *Project = frontend(argc, argv);
+    ROSE_ASSERT(Project != nullptr);
 
-    // For each source file in the project
-    SgFilePtrList &ptr_list = OrgCode->get_fileList();
-    //Attach the original schedule of each statement for the
-    //original input code
-    attachOriginalSchedule(OrgCode);
-    //Check the transformed and untransformed code statements
-//    if(compareInputAndOutPutStatements()
+    // Attach the original schedule of each statement
+    polycheckdemo::attachOriginalSchedule(Project);
+    // Printing all the statements inside a function
+    std::cout << "The valid Statement is:\t";
+    polycheckdemo::printStatements(Project);
+    std::cout << std::endl;
+
+
     std::cout << "Done ...\n";
 
     // Generate the source code
-    return backend(OrgCode);
+    return backend(Project);
 }
