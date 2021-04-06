@@ -148,7 +148,6 @@ namespace polycheckdemo{
             }
             std::cout <<">";
         }
-
     };
 
     //@brief This class attaches the attribute (original schedule) to each SgExprStatement node
@@ -182,6 +181,13 @@ namespace polycheckdemo{
      * wref, readref, etc.
      */
     void printStatements(SgProject* project);
+
+    /*
+     * @brief Using dangerous mechanism of adding code using string to the file
+     * We probably don't need to use this, we can simply pre-code the whole functions and
+     * just instrument the code with write variables to pass to the function
+     */
+    void addFirstWriterFunction(SgProject* project);
 }
 
 

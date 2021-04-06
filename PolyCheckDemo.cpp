@@ -10,6 +10,7 @@
 #include <iostream>
 #include "polycheck_demo_utils.h"
 
+#define NEW_FILE_INFO Sg_File_info::generateDefaultFileInfoForTransformationNode();
 
 int main(int argc, char *argv[])
 {
@@ -26,10 +27,12 @@ int main(int argc, char *argv[])
     std::cout << "The valid Statement is:\t";
     polycheckdemo::printStatements(Project);
     std::cout << std::endl;
-
-
+    //Lets add a dummy function to the serial code
+    polycheckdemo::addFirstWriterFunction(Project);
+    Sg_File_Info::generateDefaultFileInfoForTransformationNode();
     std::cout << "Done ...\n";
 
     // Generate the source code
+//    Project->unparse();
     return backend(Project);
 }

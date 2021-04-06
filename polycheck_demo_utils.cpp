@@ -146,13 +146,20 @@ namespace polycheckdemo {
 
 
     //================================= Helper Function ========================================
-
+    /*
+     *@brief This function detects SgExprStatements nodes and it will attack
+     * an original schedule (a time stamp) to these nodes
+     */
     void attachOriginalSchedule(SgProject* project){
         OriginalScheduleAttacher org_attacher;
         OriginalScheduleAttribute inherit;
         org_attacher.traverse(project, inherit);
     }
 
+    /*
+     * @brief this function simply detect an statement and it will print the statement
+     * NOTE: JUST SAW AN EXAMPLE:  expr_state->unparseToString() -> this will do the trick :))))))
+     */
     void printStatements(SgProject* project){
         std::vector<SgNode *> expr_set = NodeQuery::querySubTree(project, V_SgExprStatement);
         for(auto& tmp: expr_set){
@@ -173,5 +180,28 @@ namespace polycheckdemo {
             }
         }
     }
+
+    void addFirstWriterFunction(SgProject* project){
+        std::string first_write_string = "#include <iostream>\n"
+                                         "void firstWrite(){\n"
+                      "\tstd::cout << \"Hello World\" << std::endl;\n"
+                      "}";
+        std::string couting = "\n//std::cout << TEST << std::endl;\n";
+//        std::string first_write_string = "#define Shit";
+        // For each source file in the project
+        if(!project->get_skip_transformation()){
+            std::vector<SgNode *> expr_list = NodeQuery::querySubTree(project, V_SgExprStatement);
+            for(auto& expr_tmp: expr_list){
+                if(isSgBasicBlock(expr_tmp->get_parent()) != nullptr){
+                    auto expr_node = isSgExprStatement(expr_tmp);
+                    ROSE_ASSERT(expr_node);
+                    SageInterface::addTextForUnparser(expr_node, couting, AstUnparseAttribute::e_after);
+                } else {
+                    continue;
+                }
+            }
+        }
+    }
+
 
 }
