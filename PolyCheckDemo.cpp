@@ -21,14 +21,15 @@ int main(int argc, char *argv[])
     SgProject *Project = frontend(argc, argv);
     ROSE_ASSERT(Project != nullptr);
 
-    // Attach the original schedule of each statement
-    polycheckdemo::attachOriginalSchedule(Project);
-    // Printing all the statements inside a function
-    std::cout << "The valid Statement is:\t";
-    polycheckdemo::printStatements(Project);
-    std::cout << std::endl;
+//    // Attach the original schedule of each statement
+//    polycheckdemo::attachOriginalSchedule(Project);
+//    // Printing all the statements inside a function
+//    std::cout << "The valid Statement is:\t";
+//    polycheckdemo::printStatements(Project);
+//    std::cout << std::endl;
     //Lets add a dummy function to the serial code
-    polycheckdemo::addFirstWriterFunction(Project);
+    polycheckdemo::PolyCheckInstrumentation poly_obj(Project);
+    poly_obj.startInstrumenting();
     Sg_File_Info::generateDefaultFileInfoForTransformationNode();
     std::cout << "Done ...\n";
 

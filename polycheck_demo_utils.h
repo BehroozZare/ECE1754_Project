@@ -39,6 +39,69 @@ namespace polycheckdemo{
     private:
     };
 
+    //=========================== Instrumentation class ==============================
+    class PolyCheckInstrumentation{
+    private:
+        SgProject* project;
+        SgGlobal* global_scope;
+        SgFile *sageFile;
+
+        std::vector<SgFunctionDefinition*> func_def_list;
+        std::vector<std::string> simplified_schedule_name;
+        std::vector<int> min_bound;
+        std::vector<int> max_bound;
+//        std::vector<std::vector<int>>
+    public:
+        /*
+         * @brief Constructor for Poly check instrumentation code
+         * @param the project node that contatin the test code
+         */
+        explicit PolyCheckInstrumentation(SgProject* Project);
+
+        /*
+         * @brief This function will return the original code function
+         */
+        SgFunctionDefinition* getOriginalFuncDef();
+        /*
+         * @brief This function will return the transformed code function
+         */
+
+        /*
+         * @brief This function checks whether two statements are equal or not
+         */
+        bool isStatementsEqual();
+
+        /*
+         * @brief This is the main function that call other functions for instrumenting
+         */
+        void startInstrumenting();
+
+
+        /*
+         * @brief This function adds the Polycheck_demo_functions.h header that
+         * contains the tools and libraries for verification
+         */
+        void addInstrumentationHeader();
+
+
+        /*
+         * @brief This function will add some global variables
+         * that are used for polycheck verification
+         */
+        void definePolyCheckGlobalVariables();
+
+
+        /*
+         * @brief Initialize Polycheck variables
+         */
+        void InitPolyCheckVariables();
+
+        ~PolyCheckInstrumentation()=default;
+
+    };
+
+
+
 
     //=========================== Original Schedule Classes ==================================
     //@brief This class is going to be attached to each node

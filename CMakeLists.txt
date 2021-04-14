@@ -3,35 +3,6 @@ project(Project)
 
 set(CMAKE_CXX_STANDARD 11)
 
-#execute_process(COMMAND rose-config prefix
-#                OUTPUT_VARIABLE ROSE_INSTALLED)
-##$(ROSE_INSTALLED)/bin/
-#execute_process(COMMAND rose-config cxx
-#        OUTPUT_VARIABLE CXX)
-#
-#execute_process(COMMAND rose-config cppflags
-#        OUTPUT_VARIABLE CPPFLAGS)
-#
-#execute_process(COMMAND rose-config cxxflags
-#        OUTPUT_VARIABLE CXXFLAGS)
-#
-#execute_process(COMMAND rose-config ldflags
-#        OUTPUT_VARIABLE LDFLAGS)
-#
-#execute_process(COMMAND rose-config libdirs
-#        OUTPUT_VARIABLE LIBDIRS)
-
-#rose pthread boost_date_time boost_thread
-#boost_filesystem boost_program_options boost_regex boost_system
-#boost_serialization boost_wave boost_iostreams boost_chrono dl python2.7 Xlinker export-dynamic Wl,O1
-#Bsymbolic-functions z pthread dl util m
-#quadmath
-
-#set(LIBDIRS /usr/rose/lib)
-#SET(LD_LIBRARY_PATH "${LD_LIBRARY_PATH} ${LIBDIRS}")
-#SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} ${CXXFLAGS} ${CPPFLAGS}")
-#SET(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} ${LDFLAGS}")
-
 find_library(ROSE_LIBRARIES
         NAMES rose
         PATHS "/usr/rose/lib"
@@ -141,3 +112,8 @@ target_include_directories(Project
 add_compile_options(Project PUBLIC ${CXXFLAGS}
                             PUBLIC ${CPPFLAGS})
 
+
+
+
+
+#add_executable(sidel input_code.cpp)
