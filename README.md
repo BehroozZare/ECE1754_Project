@@ -1,2 +1,2 @@
 # ECE1754_Project
-The project of ECE1754
+ECE1754 final project
