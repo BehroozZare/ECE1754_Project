@@ -27,6 +27,8 @@ int main(int argc, char *argv[])
 //    std::cout << "The valid Statement is:\t";
 //    polycheckdemo::printStatements(Project);
 //    std::cout << std::endl;
+
+
     //Lets add a dummy function to the serial code
     polycheckdemo::PolyCheckInstrumentation poly_obj(Project);
     poly_obj.startInstrumenting();

@@ -239,7 +239,6 @@ namespace polycheckdemo {
         initPolyCheckVariables();
         //Also add required assertions
         instrumentCode();
-        //Add the LastWriter check after the instrumented function call
     }
 
     SgFunctionDefinition* PolyCheckInstrumentation::getOriginalFuncDef(){
@@ -705,9 +704,9 @@ namespace polycheckdemo {
         for(int i = 0; i < wref_fix_flag.size(); i++){
             wref_fix_flag_string+= "wref_fix_flag.push_back(";
             if(wref_fix_flag[i]){
-                wref_fix_flag_string += "false";
-            } else {
                 wref_fix_flag_string += "true";
+            } else {
+                wref_fix_flag_string += "false";
             }
             wref_fix_flag_string += ");\n";
         }
@@ -773,6 +772,110 @@ namespace polycheckdemo {
         ROSE_ASSERT(return_statement);
 
         SageInterface::addTextForUnparser(return_statement, last_write_check_string, AstUnparseAttribute::e_before);
+
+
+
+        //Instrumenting the transformed function
+        //Finding the expression in the Transformed_func
+        std::string instrumented_string = "\n//====================== Compiler stuff ===================\n";;
+        std::string expr_string;
+        std::vector<SgNode *> expr_list = NodeQuery::querySubTree(getTransformedFuncDef(), V_SgExprStatement);
+        SgExprStatement* state;
+        for(auto tmp: expr_list){
+            if(isSgBasicBlock(tmp->get_parent())){
+                state = isSgExprStatement(tmp);
+                ROSE_ASSERT(state);
+                D(expr_string =  state->unparseToString());
+                D(std::cout << "Found transformed expression " << expr_string << std::endl;)
+                break;
+            }
+        }
+
+        //We extract the index in here using string for generality
+        std::vector<std::string> transformed_LHS_index;
+        int start_point = expr_string.find("=");
+        std::string write_string = expr_string.substr(0, start_point);
+        std::string read_string = expr_string.substr(start_point + 1, expr_string.size());
+        //Driving write subscripts
+        while(write_string.find("[") != write_string.npos){
+            int start_index_pos = write_string.find("[") + 1;
+            int end_index_pos = write_string.find("]");
+            transformed_LHS_index.push_back(write_string.substr(start_index_pos, end_index_pos - start_index_pos));
+            write_string = write_string.substr(end_index_pos + 1, write_string.size());
+            std::cout << transformed_LHS_index.back() <<std::endl;
+        }
+
+        std::vector<std::string> transformed_RHS_index;
+        while(read_string.find("[") != read_string.npos){
+            int start_index_pos = read_string.find("[") + 1;
+            int end_index_pos = read_string.find("]");
+            transformed_RHS_index.push_back(read_string.substr(start_index_pos, end_index_pos - start_index_pos));
+            read_string = read_string.substr(end_index_pos + 1, read_string.size());
+            std::cout << transformed_RHS_index.back() <<std::endl;
+        }
+
+
+        instrumented_string += "std::vector<int> wref{";
+        std::string write_transformed_index;
+        for(auto& index: transformed_LHS_index){
+            write_transformed_index += index + ",";
+        }
+        write_transformed_index.pop_back();
+        instrumented_string += write_transformed_index + "};\n";
+        instrumented_string += "polyfunc::StateInst optStat;\n";
+
+        write_transformed_index.clear();
+        for(auto& subscript: transformed_LHS_index){
+            write_transformed_index += "[" + subscript + "]";
+        }
+        instrumented_string += "if(shadow" + write_transformed_index + ".isInit() || !shadow" +
+                write_transformed_index + ".isValid()){\n";
+        instrumented_string +=  "optStat = polyfunc::firstWriter(min_bound, wref, wref_fix_flag, mapping.LHS_MAP);\n"
+                                " assert(optStat.isValid());\n";
+        instrumented_string = instrumented_string + "} else {\n optStat = polyfunc::nextWriter"
+                                                    "(shadow" + write_transformed_index +
+                                                    ", max_bound, wref, wref_fix_flag, mapping.LHS_MAP);"
+                                                    "\n assert(optStat.isValid());\n}\n";
+        instrumented_string += "std::vector<int> read_ref{";
+        for(auto& r: transformed_RHS_index){
+            instrumented_string += r;
+            instrumented_string += ",";
+        }
+        instrumented_string.pop_back();
+        instrumented_string += "};\n";
+        instrumented_string += "for(int rr_ptr = 0; rr_ptr < read_ref.size(); rr_ptr++){\n"
+                               "assert(polyfunc::dotProduct(mapping.RHS_MAP[rr_ptr],"
+                               " optStat.instance) + read_const[rr_ptr] == read_ref[rr_ptr]);\n}\n";
+        int cnt = 0;
+        for(int j = 0; j < read_ref_dim_tmp.size() - 1; j++){
+            instrumented_string += "std::vector<int> read_ref" + std::to_string(cnt) +
+                                   "(read_ref.begin() + " + std::to_string(read_ref_dim_tmp[j]) + ", read_ref.begin() + " +
+                                   std::to_string(read_ref_dim_tmp[j + 1]) + ");\n";
+            cnt++;
+        }
+
+        cnt = 0;
+        for(int j = 0; j < read_ref_dim_tmp.size() - 1; j++){
+            instrumented_string += "assert(shadow";
+            for(int i = read_ref_dim_tmp[j]; i < read_ref_dim_tmp[j + 1]; i++){
+                instrumented_string += "[" + transformed_RHS_index[i] + "]";
+            }
+            instrumented_string += "== polyfunc::writeBeforeRead(optStat, min_bound, read_ref"
+                    + std::to_string(cnt) + ", wref_fix_flag, mapping.LHS_MAP));\n";
+            cnt++;
+        }
+        instrumented_string += "shadow";
+        for(auto& w: transformed_LHS_index){
+            instrumented_string = instrumented_string + "[" + w + "]";
+        }
+        instrumented_string += "= optStat;\n";
+        instrumented_string += "//==========================================================\n";
+        D(std::cout << instrumented_string << std::endl;)
+        SageInterface::addTextForUnparser(state, instrumented_string, AstUnparseAttribute::e_after);
+
+
+
+//        //=======================================================
     }
 
     SgFunctionCallExp *PolyCheckInstrumentation::getFuncCall() {

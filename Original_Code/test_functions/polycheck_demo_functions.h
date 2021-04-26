@@ -386,7 +386,7 @@ StateInst lastWriter(const StateInst& max_b,const std::vector<int>& wref,
 
 
     if(mapping.size() != wref.size()){
-        std::cerr << "The mapping dimension doesn't match the wref dimentions" << std::endl;
+        std::cerr << "The mapping dimension doesn't match the wref dimensions" << std::endl;
     }
 
     if(std::count(fix_flags.begin(), fix_flags.end(), true) != wref.size()){
