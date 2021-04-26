@@ -19,76 +19,75 @@ polyfunc::ExpressionMapping mapping;
 polyfunc::StateInst min_bound;
 polyfunc::StateInst max_bound;
 std::vector<bool> wref_fix_flag;
-std::vector<int> read_const;
+std::vector<double> read_const;
 //=========================================================
 
 
-void Instrument_Sidel(int t,int ilo,int ihi, int jlo, int jhi){
+void Instrumented_Seidel(int t,int ilo,int ihi, int jlo, int jhi){
     if (ilo > ihi || jlo > jhi) return;
     if (ilo == ihi && jlo == jhi){
         Instrument_A[ilo][jlo] = Instrument_A[ilo-1][jlo] + Instrument_A[ilo][jlo-1];
-        // ACopy[ilo][jlo] = ACopy[ilo][jlo-1] + ACopy[ilo-1][jlo];
-        //===== Insert the checker code after static analysis =====
-        // Note that the paper skip this part in its example, because
-        // finding the FirstWriter and NextWriter is actually depends on number of statemetns
-        // in the original and optimized code. So there should be a way to match an statement in
-        // The optimized code to a statement in Original Code (They didn't explain this part)
-        // They also check the operator too, but I omit that part because I need parsing and syntax reading
         std::vector<int> wref{ilo, jlo};
         polyfunc::StateInst optStat;
         if(shadow[ilo][jlo].isInit() || !shadow[ilo][jlo].isValid()){
-            optStat = polyfunc::firstWriter(min_bound, wref, wref_fix_flag, mapping.LHS_MAP);
+            optStat = polyfunc::firstWriter(min_bound, wref,
+                                            wref_fix_flag, mapping.LHS_MAP);
             assert(optStat.isValid());
         } else {
-            optStat = polyfunc::nextWriter(shadow[ilo][jlo], max_bound, wref, wref_fix_flag, mapping.LHS_MAP);
+            optStat = polyfunc::nextWriter(shadow[ilo][jlo], max_bound,
+                                           wref, wref_fix_flag, mapping.LHS_MAP);
             assert(optStat.isValid());
         }
 
         //Checking the right hand side
         std::vector<int> read_ref{ilo - 1, jlo, ilo, jlo - 1};
         for(int rr_ptr = 0; rr_ptr < read_ref.size(); rr_ptr++){
-            assert(polyfunc::dotProduct(mapping.RHS_MAP[rr_ptr], optStat.instance) + read_const[rr_ptr] == read_ref[rr_ptr]);
+            assert(polyfunc::dotProduct(mapping.RHS_MAP[rr_ptr],
+                                        optStat.instance) + read_const[rr_ptr] == read_ref[rr_ptr]);
         }
 
         //Checking the validity of the value of rhs arrays
         std::vector<int> read_ref0(read_ref.begin(), read_ref.begin() + 2);
-        assert(shadow[ilo - 1][jlo] == polyfunc::writeBeforeRead(optStat, min_bound, read_ref0, wref_fix_flag, mapping.LHS_MAP));
+        assert(shadow[ilo - 1][jlo] == polyfunc::writeBeforeRead(optStat, min_bound,
+                                                                 read_ref0, wref_fix_flag, mapping.LHS_MAP));
         std::vector<int> read_ref1(read_ref.begin() + 2, read_ref.begin() + 4);
-        assert(shadow[ilo][jlo - 1] == polyfunc::writeBeforeRead(optStat, min_bound, read_ref1, wref_fix_flag, mapping.LHS_MAP));
+        assert(shadow[ilo][jlo - 1] == polyfunc::writeBeforeRead(optStat, min_bound,
+                                                                 read_ref1, wref_fix_flag, mapping.LHS_MAP));
         shadow[ilo][jlo] = optStat;
         //=======================================================
 
 
     }else{
-        Instrument_Sidel(t, ilo,(ilo + ihi) / 2, jlo, (jlo + jhi)/2); //Top-Left
-        Instrument_Sidel(t, ilo,(ilo + ihi) / 2, (jlo + jhi) / 2 + 1,jhi); //Top-Right
-        Instrument_Sidel(t, (ilo + ihi) / 2 + 1, ihi, jlo, (jlo + jhi) / 2); //Bottom-Left
-        Instrument_Sidel(t, (ilo + ihi) / 2 + 1, ihi, (jlo + jhi)/2 + 1, jhi); //Bottom-Right
+        Instrumented_Seidel(t, ilo,(ilo + ihi) / 2, jlo, (jlo + jhi)/2); //Top-Left
+        Instrumented_Seidel(t, ilo,(ilo + ihi) / 2, (jlo + jhi) / 2 + 1,jhi); //Top-Right
+        Instrumented_Seidel(t, (ilo + ihi) / 2 + 1, ihi, jlo, (jlo + jhi) / 2); //Bottom-Left
+        Instrumented_Seidel(t, (ilo + ihi) / 2 + 1, ihi, (jlo + jhi)/2 + 1, jhi); //Bottom-Right
     }
 
     if (ilo == 1 && ihi == N - 1 && jlo == 1 && jhi == N-1 && t < (T - 1)){ // The naive poly chech find this bug
-        Instrument_Sidel(t+1, ilo, ihi, jlo, jhi);// Next time step
+        Instrumented_Seidel(t+1, ilo, ihi, jlo, jhi);// Next time step
     }
 }
 
-void Transformed_Sidel(int t,int ilo,int ihi, int jlo, int jhi){
+void Transformed_Seidel(int t,int ilo,int ihi, int jlo, int jhi){
     if (ilo > ihi || jlo > jhi) return;
     if (ilo == ihi && jlo == jhi){
         Transformed_A[ilo][jlo] = Transformed_A[ilo-1][jlo] + Transformed_A[ilo][jlo-1];
     }else{
-        Transformed_Sidel(t, ilo,(ilo + ihi) / 2, jlo, (jlo + jhi)/2); //Top-Left
-        Transformed_Sidel(t, ilo,(ilo + ihi) / 2, (jlo + jhi) / 2 + 1,jhi); //Top-Right
-        Transformed_Sidel(t, (ilo + ihi) / 2 + 1, ihi, jlo, (jlo + jhi) / 2); //Bottom-Left
-        Transformed_Sidel(t, (ilo + ihi) / 2 + 1, ihi, (jlo + jhi)/2 + 1, jhi); //Bottom-Right
+        Transformed_Seidel(t, ilo,(ilo + ihi) / 2, jlo, (jlo + jhi)/2); //Top-Left
+        Transformed_Seidel(t, ilo,(ilo + ihi) / 2, (jlo + jhi) / 2 + 1,jhi); //Top-Right
+        Transformed_Seidel(t, (ilo + ihi) / 2 + 1, ihi, jlo, (jlo + jhi) / 2); //Bottom-Left
+        Transformed_Seidel(t, (ilo + ihi) / 2 + 1, ihi, (jlo + jhi)/2 + 1, jhi); //Bottom-Right
     }
 
-    if (ilo == 1 && ihi == N - 1 && jlo == 1 && jhi == N-1 && t < (T - 1)){ // The naive poly chech find this bug
-        Transformed_Sidel(t+1, ilo, ihi, jlo, jhi);// Next time step
+    if (ilo == 1 && ihi == N - 1 && jlo == 1 && jhi == N-1 && t < (T - 1)){
+        Transformed_Seidel(t+1, ilo, ihi, jlo, jhi);// Next time step
     }
 }
 
+//
 
-void Original_Sidel(){
+void Original_Seidel(){
     for(int t = 0; t < T; t++){
         for(int i = 1; i < N; i++){
             for(int j = 1; j < N; j++){
@@ -102,7 +101,8 @@ void Original_Sidel(){
 
 int main() {
     //======================= Compiler stuff =======================
-    std::vector<std::vector<bool>> readWriteSet(N, std::vector<bool>(N, true));//True for read set and False for the write set
+    //True for read set and False for the write set
+    std::vector<std::vector<bool>> readWriteSet(N, std::vector<bool>(N, true));
 
     //Initialize Shadow variables
     for(int i = 1; i < N; i++){
@@ -172,9 +172,9 @@ int main() {
             Instrument_A[i][j] = Original_A[i][j];
         }
     }
-    Original_Sidel();
-    Transformed_Sidel(0, 1, N - 1, 1, N - 1);
-    Instrument_Sidel(0, 1, N - 1, 1, N - 1);
+    Original_Seidel();
+    Transformed_Seidel(0, 1, N - 1, 1, N - 1);
+    Instrumented_Seidel(0, 1, N - 1, 1, N - 1);
     for(int i = 0; i < N; i++){
         for(int j = 0; j < N; j++){
             if(Original_A[i][j] != Transformed_A[i][j])
@@ -187,7 +187,9 @@ int main() {
     for(int i = 1; i < N; i++){
         for(int j = 1; j < N; j++){
             std::vector<int> wref{i,j};
-            assert(shadow[i][j] == polyfunc::lastWriter(max_bound, wref, wref_fix_flag, mapping.LHS_MAP));
+            assert(shadow[i][j] ==
+            polyfunc::lastWriter(max_bound,
+                                 wref, wref_fix_flag, mapping.LHS_MAP));
         }
     }
     //================================================================

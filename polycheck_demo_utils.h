@@ -46,11 +46,19 @@ namespace polycheckdemo{
         SgGlobal* global_scope;
         SgFile *sageFile;
 
+        SgFunctionDefinition* instruement_func_def;
         std::vector<SgFunctionDefinition*> func_def_list;
         std::vector<std::string> simplified_schedule_name;
         std::vector<int> min_bound;
         std::vector<int> max_bound;
-//        std::vector<std::vector<int>>
+        std::vector<std::vector<int>> RHS_index;
+        std::vector<std::vector<int>> LHS_index;
+        std::vector<bool> wref_fix_flag;
+        std::vector<bool> init_important_flag;
+        std::vector<int> read_const;
+        std::vector<int> write_const;
+        int wref_dim;
+        std::vector<int> read_ref_dim;
     public:
         /*
          * @brief Constructor for Poly check instrumentation code
@@ -62,9 +70,31 @@ namespace polycheckdemo{
          * @brief This function will return the original code function
          */
         SgFunctionDefinition* getOriginalFuncDef();
+
         /*
          * @brief This function will return the transformed code function
          */
+        SgFunctionDefinition* getTransformedFuncDef();
+
+        /*
+         * @brief This function will return the main function definition
+         */
+        SgFunctionDefinition* getMainFuncDef();
+
+        /*
+         * @brief This function will return the main function definition
+         */
+        SgFunctionCallExp* getFuncCall();
+
+        /*
+         * @brief copy the transformed function and change its name to Instrumented function
+         */
+        void generateTheInstrumentedFunction();
+
+        /*
+        * @brief copy the transformed function and change its name to Instrumented function
+         */
+        void instrumentCode();
 
         /*
          * @brief This function checks whether two statements are equal or not
@@ -76,13 +106,11 @@ namespace polycheckdemo{
          */
         void startInstrumenting();
 
-
         /*
          * @brief This function adds the Polycheck_demo_functions.h header that
          * contains the tools and libraries for verification
          */
         void addInstrumentationHeader();
-
 
         /*
          * @brief This function will add some global variables
@@ -90,18 +118,14 @@ namespace polycheckdemo{
          */
         void definePolyCheckGlobalVariables();
 
-
         /*
          * @brief Initialize Polycheck variables
          */
-        void InitPolyCheckVariables();
+        void initPolyCheckVariables();
 
         ~PolyCheckInstrumentation()=default;
 
     };
-
-
-
 
     //=========================== Original Schedule Classes ==================================
     //@brief This class is going to be attached to each node

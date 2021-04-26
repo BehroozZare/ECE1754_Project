@@ -236,11 +236,9 @@ namespace polycheckdemo {
         //Add Variables definitions
         definePolyCheckGlobalVariables();
         //initialize the Variables (extracting the statement information and initialize the shadow variable)
-        InitPolyCheckVariables();
-        //Add Instrumented Function and call it from main function
-
-        //Add the Assertions into the Instrumented function
-
+        initPolyCheckVariables();
+        //Also add required assertions
+        instrumentCode();
         //Add the LastWriter check after the instrumented function call
     }
 
@@ -260,6 +258,31 @@ namespace polycheckdemo {
     }
 
     bool PolyCheckInstrumentation::isStatementsEqual() {
+
+    }
+
+    void PolyCheckInstrumentation::generateTheInstrumentedFunction(){
+        auto transformed_func = getTransformedFuncDef();
+        ROSE_ASSERT(transformed_func);
+        std::string tmp = transformed_func->get_declaration()->get_name();
+        size_t found = tmp.find("_");
+        std::string func_name = tmp.substr(found + 1, tmp.size());
+        D(std::cout << "The name of the function is: " << func_name << std::endl;)
+        // Make a copy and set it to a new name
+        SgFunctionDeclaration* func_copy =
+                isSgFunctionDeclaration(SageInterface::copyStatement (transformed_func->get_declaration()));
+        ROSE_ASSERT(func_copy);
+        func_copy->set_name("Instrumented_" + func_name);
+        SageInterface::insertStatementAfter(transformed_func->get_declaration(), func_copy);
+        this->func_def_list.push_back(func_copy->get_definition());
+        this->instruement_func_def = func_copy->get_definition();
+
+        //Change the name of function calls inside this instrumented function
+        std::vector<SgNode* >  func_call_list = NodeQuery::querySubTree(this->instruement_func_def, V_SgFunctionCallExp);
+        for(auto& func_call_tmp: func_call_list){
+            auto func_call = isSgFunctionCallExp(func_call_tmp);
+            ROSE_ASSERT(func_call);
+        }
 
     }
 
@@ -284,7 +307,7 @@ namespace polycheckdemo {
 
     }
 
-    void PolyCheckInstrumentation::InitPolyCheckVariables() {
+    void PolyCheckInstrumentation::initPolyCheckVariables() {
         //Get the original function and compute the simplified original schedule + Min and Max bound
         auto original_func = getOriginalFuncDef();
         ROSE_ASSERT(original_func);
@@ -317,8 +340,10 @@ namespace polycheckdemo {
             D(std::cout << min_bound.back() << " < " <<
             simplified_schedule_name.back() << " < " << max_bound.back() << std::endl;)
         }
-
-        //Get statement Wref and Read Reference and compute the rest of the variables
+        //Resizing the flag vector
+        wref_fix_flag.resize(simplified_schedule_name.size(), false);
+        init_important_flag.resize(simplified_schedule_name.size(), false);
+        //Get statement Wref and Read Reference and compute the indices of the variables
         std::vector<SgNode *> expr_list = NodeQuery::querySubTree(original_func, V_SgExprStatement);
         for(auto tmp: expr_list){
             if(isSgBasicBlock(tmp->get_parent())){
@@ -331,14 +356,433 @@ namespace polycheckdemo {
                 auto assign_node = isSgAssignOp(expr_state->get_expression());
                 ROSE_ASSERT(assign_node);
                 auto write_sub_tree = assign_node->get_lhs_operand();
+                ROSE_ASSERT(write_sub_tree);
                 auto read_sub_tree = assign_node->get_rhs_operand();
+                ROSE_ASSERT(read_sub_tree);
+                //computing the write index
+                std::vector<SgNode* > write_subscripts_list = NodeQuery::querySubTree(write_sub_tree, V_SgPntrArrRefExp);
+                //This function drive the scalar in subscripts of the form at + bi + cj + d
+                //If we want more complete function, we need an iterator like the print class that I have presented
+                wref_dim = write_subscripts_list.size();
+                D(std::cout << "The wref dimension is " << wref_dim << std::endl;)
+                write_const.resize(wref_dim, 0);
+                //Iterating over the dimension
+                for(int cnt = 0; cnt < write_subscripts_list.size(); cnt++){
+                    auto& write_subscript_tmp = write_subscripts_list[cnt];
+                    auto write_subscript = isSgPntrArrRefExp(write_subscript_tmp)->get_rhs_operand();
+                    ROSE_ASSERT(write_subscript);
+                    //Find the constant term
+                    std::vector<SgNode*> int_list = NodeQuery::querySubTree(write_subscript, V_SgIntVal);
+                    for(auto& int_node_tmp: int_list){
+                        auto int_node = isSgIntVal(int_node_tmp);
+                        ROSE_ASSERT(int_node != nullptr);
+                        if(isSgAddOp(int_node->get_parent())){
+                            write_const[cnt] = int_node->get_value();
+                        } else if(isSgSubtractOp(int_node->get_parent())) {
+                            write_const[cnt] = -1 * int_node->get_value();
+                        }
+                    }
+
+                    //Find the multiplier terms
+                    std::vector<SgNode*> inductive_list = NodeQuery::querySubTree(write_subscript, V_SgVarRefExp);
+                    ROSE_ASSERT(!inductive_list.empty());
+                    for(auto& ind: inductive_list){
+                        auto inductive_variable = isSgVarRefExp(ind);
+                        ROSE_ASSERT(inductive_variable);
+                        this->LHS_index.emplace_back(simplified_schedule_name.size(), 0);
+                        if(!isSgMultiplyOp(inductive_variable->get_parent())){
+                            for(int cnt1 = 0; cnt1 < simplified_schedule_name.size(); cnt1++){
+                                if(inductive_variable->get_symbol()->get_name() == simplified_schedule_name[cnt1]){
+                                    LHS_index.back()[cnt1] = 1;
+                                    wref_fix_flag[cnt1] = true;
+                                    init_important_flag[cnt1] = true;
+                                    D(std::cout << "Adding scalar value 1 as the multiplier of inductive variable " <<
+                                                simplified_schedule_name[cnt1] << std::endl;)
+                                }
+                            }
+                        } else if(isSgMultiplyOp(inductive_variable->get_parent())) {
+                            std::vector<SgNode*> value_nodes =
+                                    NodeQuery::querySubTree(inductive_variable->get_parent(), V_SgIntVal);
+                            auto value_node = isSgIntVal(value_nodes.front());
+                            ROSE_ASSERT(value_node);
+                            for(int cnt1 = 0; cnt1 < simplified_schedule_name.size(); cnt1++){
+                                if(inductive_variable->get_symbol()->get_name() == simplified_schedule_name[cnt1]){
+                                    LHS_index.back()[cnt1] = value_node->get_value();
+                                    wref_fix_flag[cnt1] = true;
+                                    init_important_flag[cnt1] = true;
+                                    D(std::cout << "Adding scalar value " << value_node->get_value()
+                                    << " as the multiplier of inductive variable " <<
+                                    simplified_schedule_name[cnt1] << std::endl;)
+                                }
+                            }
+                        } else {
+                                std::cerr << "undefined behaviour detected in driving scalar"
+                                             " value from write subscripts" << std::endl;
+                        }
+                    }
+                }
+
+                D(
+                    for(int cnt = 0; cnt < LHS_index.size(); cnt++){
+                        auto& sub = LHS_index[cnt];
+                        for(int i = 0; i < simplified_schedule_name.size(); i++){
+                            std::cout << sub[i] << " * " << simplified_schedule_name[i] << " + ";
+                        }
+                        std::cout << write_const[cnt] << std::endl;
+                    }
+                )
 
 
+                //computing the read index
+                std::vector< SgNode* > read_node_list = NodeQuery::querySubTree(read_sub_tree, V_SgPntrArrRefExp);
+                std::vector< SgNode* > read_head_nodes;
+                for(auto& node: read_node_list){
+                    if(isSgAddOp(node->get_parent()) || isSgSubtractOp(node->get_parent()) ){
+                        read_head_nodes.push_back(node);
+                        std::vector< SgNode* > read_subscript_list = NodeQuery::querySubTree(node, V_SgPntrArrRefExp);
+                        read_ref_dim.push_back(read_subscript_list.size());
+                    }
+                }
+                int num_read_subscripts = 0;
+                for(auto& dim: read_ref_dim){
+                    num_read_subscripts += dim;
+                }
+
+                D(std::cout << "The number of operands in read part of the assignment are: "
+                << read_head_nodes.size() << std::endl;)
+
+                D(for(auto& dim: read_ref_dim){
+                    std::cout << "The read operand dimension is " << dim << std::endl;
+                })
+
+                //Iterating over each operand
+                read_const.resize(num_read_subscripts, 0);
+                int read_dim_start = 0;
+                for(int op = 0; op < read_head_nodes.size(); op++){
+                    std::vector< SgNode* > read_subscript_list =
+                            NodeQuery::querySubTree(read_head_nodes[op], V_SgPntrArrRefExp);
+                    //Iterating over the subscripts (the dimensions)
+                    for(int cnt = 0; cnt < read_subscript_list.size(); cnt++){
+                        auto read_subscript = isSgPntrArrRefExp(read_subscript_list[cnt])->get_rhs_operand();
+                        ROSE_ASSERT(read_subscript);
+                        //Find the constant term
+                        std::vector<SgNode*> int_list = NodeQuery::querySubTree(read_subscript, V_SgIntVal);
+                        for(auto& int_node_tmp: int_list){
+                            auto int_node = isSgIntVal(int_node_tmp);
+                                    ROSE_ASSERT(int_node != nullptr);
+                            if(isSgAddOp(int_node->get_parent())){
+                                read_const[cnt + read_dim_start] = int_node->get_value();
+                            } else if(isSgSubtractOp(int_node->get_parent())) {
+                                read_const[cnt + read_dim_start] = -1 * int_node->get_value();
+                            }
+                        }
+
+                        //Computing the scalar term
+                        std::vector<SgNode*> inductive_list = NodeQuery::querySubTree(read_subscript, V_SgVarRefExp);
+                        ROSE_ASSERT(!inductive_list.empty());
+                        for(auto& ind: inductive_list){
+                            auto inductive_variable = isSgVarRefExp(ind);
+                            ROSE_ASSERT(inductive_variable);
+                            this->RHS_index.emplace_back(simplified_schedule_name.size(), 0);
+                            if(!isSgMultiplyOp(inductive_variable->get_parent())){
+                                for(int cnt1 = 0; cnt1 < simplified_schedule_name.size(); cnt1++){
+                                    if(inductive_variable->get_symbol()->get_name() == simplified_schedule_name[cnt1]){
+                                        RHS_index.back()[cnt1] = 1;
+                                        init_important_flag[cnt1] = true;
+                                        D(std::cout << "Adding scalar value 1 as the multiplier of inductive variable " <<
+                                                    simplified_schedule_name[cnt1] << std::endl;)
+                                    }
+                                }
+                            } else if(isSgMultiplyOp(inductive_variable->get_parent())) {
+                                std::vector<SgNode*> value_nodes =
+                                        NodeQuery::querySubTree(inductive_variable->get_parent(), V_SgIntVal);
+                                auto value_node = isSgIntVal(value_nodes.front());
+                                ROSE_ASSERT(value_node);
+                                for(int cnt1 = 0; cnt1 < simplified_schedule_name.size(); cnt1++){
+                                    if(inductive_variable->get_symbol()->get_name() == simplified_schedule_name[cnt1]){
+                                        RHS_index.back()[cnt1] = value_node->get_value();
+                                        init_important_flag[cnt1] = true;
+                                        D(std::cout << "Adding scalar value " << value_node->get_value()
+                                                    << " as the multiplier of inductive variable " <<
+                                                    simplified_schedule_name[cnt1] << std::endl;)
+                                    }
+                                }
+                            } else {
+                                std::cerr << "undefined behaviour detected in driving scalar"
+                                             " value from read subscripts" << std::endl;
+                            }
+                        }
+                    }
+                    read_dim_start += read_ref_dim[op];
+                }
+
+                D(
+                    for(int cnt = 0; cnt < RHS_index.size(); cnt++){
+                        auto& sub = RHS_index[cnt];
+                        for(int i = 0; i < simplified_schedule_name.size(); i++){
+                            std::cout << sub[i] << " * " << simplified_schedule_name[i] << " + ";
+                        }
+                        std::cout << read_const[cnt] << std::endl;
+                    }
+                )
             }
         }
 
-        //First we need to drive the main function access pattern
+        D(
+        //computing the fix flag
+        std::cout << "The wref fix flag is: " << std::endl;
+        for(int i = 0; i < wref_fix_flag.size(); i++){
+            std::cout << wref_fix_flag[i] << "\t";
+        }
+        std::cout << std::endl;
 
-
+        //computing the fix flag
+        std::cout << "The important flag is: " << std::endl;
+        for(int i = 0; i < init_important_flag.size(); i++){
+            std::cout << init_important_flag[i] << "\t";
+        }
+        std::cout << std::endl;)
     }
+
+    SgFunctionDefinition *PolyCheckInstrumentation::getTransformedFuncDef() {
+        for(auto func_def: func_def_list){
+            ROSE_ASSERT(isSgFunctionDefinition(func_def));
+            std::string func_name = func_def->get_declaration()->get_name();
+            size_t found = func_name.find("Transformed_");
+            if(found != std::string::npos){
+                D(std::cout << "Found the Transformed code inside function " << func_name << std::endl;)
+                return func_def;
+            }
+        }
+        D(std::cerr << "Code Doesn't have Transformed_* function name "
+                       "- Polycheck cannot detect the Transformed code" << std::endl;)
+        return nullptr;
+    }
+
+    SgFunctionDefinition *PolyCheckInstrumentation::getMainFuncDef() {
+        for(auto func_def: func_def_list){
+            ROSE_ASSERT(isSgFunctionDefinition(func_def));
+            std::string func_name = func_def->get_declaration()->get_name();
+            size_t found = func_name.find("main");
+            if(found != std::string::npos){
+                D(std::cout << "Found the main code inside function " << func_name << std::endl;)
+                return func_def;
+            }
+        }
+        D(std::cerr << "Code Doesn't have main function name "
+                       "- I don't think this code is runnable at all!" << std::endl;)
+        return nullptr;
+    }
+
+    void PolyCheckInstrumentation::instrumentCode() {
+        //Init shadow variable
+        std::string init_string = "\n//====================== Compiler stuff ===================\n"
+                                   "std::vector<std::vector<bool>> readWriteSet(N, std::vector<bool>(N, true));\n";
+
+        //Generate for loops
+        std::vector<std::string> for_loops;
+        for(int i = 0; i < wref_fix_flag.size(); i++){
+            std::string for_loop;
+            if(wref_fix_flag[i]){
+                for_loop = "for(int " + this->simplified_schedule_name[i] +  "=" + std::to_string(min_bound[i]) + ";";
+                for_loop += this->simplified_schedule_name[i] + "<" + std::to_string(max_bound[i]) + ";";
+                for_loop += this->simplified_schedule_name[i] + "++){\n";
+            }
+            for_loops.push_back(for_loop);
+        }
+
+        for(auto& for_loop: for_loops){
+            init_string += for_loop;
+        }
+
+
+        //Creating the index
+        std::string write_subscript;
+        for(int subscript_ptr = LHS_index.size() - 1; subscript_ptr >= 0; subscript_ptr--){
+            write_subscript += "[";
+            auto& sub = this->LHS_index[subscript_ptr];
+            for(int inductive_ptr = 0; inductive_ptr < this->simplified_schedule_name.size(); inductive_ptr++){
+                if(sub[inductive_ptr] != 0){
+                    write_subscript += std::to_string(sub[inductive_ptr]) + "*" + this->simplified_schedule_name[inductive_ptr] + " + ";
+                }
+            }
+            write_subscript += std::to_string(write_const[subscript_ptr]);
+            write_subscript+= "]";
+        }
+
+
+        std::vector<std::string> read_subscript;
+        auto read_ref_dim_tmp = read_ref_dim;
+        read_ref_dim_tmp.insert(read_ref_dim_tmp.begin(), 0);
+        for(int i = 1; i < read_ref_dim_tmp.size(); i++){
+            read_ref_dim_tmp[i] = read_ref_dim_tmp[ i - 1 ] + read_ref_dim_tmp[i];
+        }
+
+        for(int j = 0; j < read_ref_dim.size(); j++){
+            std::string read_sub;
+            for(int subscript_ptr = read_ref_dim_tmp[j + 1] - 1; subscript_ptr >= read_ref_dim_tmp[j]; subscript_ptr--){
+                read_sub += "[";
+                auto& sub = this->RHS_index[subscript_ptr];
+                for(int inductive_ptr = 0; inductive_ptr < this->simplified_schedule_name.size(); inductive_ptr++){
+                    if(sub[inductive_ptr] != 0){
+                        read_sub += std::to_string(sub[inductive_ptr]) + "*" + this->simplified_schedule_name[inductive_ptr] + " + ";
+                    }
+                }
+                read_sub += std::to_string(read_const[subscript_ptr]);
+                read_sub+= "]";
+            }
+            read_subscript.push_back(read_sub);
+        }
+
+        //Creating the shadow variable initialization
+        //Initialize Shadow variables
+        std::string write_init = "if(readWriteSet" + write_subscript + "){\n";
+        write_init += "shadow" + write_subscript + ".invalidate();\n";
+        write_init += "shadow" + write_subscript + ".makeNoInit();\n";
+        write_init += "readWriteSet" + write_subscript + "= false;\n}\n";
+        init_string += write_init;
+
+        //Read init
+        for(auto& r: read_subscript) {
+            std::string read_init = "if(readWriteSet" + r + "){\n";
+            read_init += "shadow" + r + ".makeValid();\n";
+            read_init += "shadow" + r + ".makeInit();\n";
+            read_init += "readWriteSet" + r + "= false;\n}\n";
+            init_string += read_init;
+        }
+        init_string += "}\n}\n";
+
+
+        //Initialize Mapping
+        std::string LHS_mapping;
+        for(int w = LHS_index.size() - 1; w >= 0; w--){
+            LHS_mapping+= "mapping.LHS_MAP.push_back(std::vector<int>({";
+            for(int i = 0; i < LHS_index[w].size() - 1; i++){
+                if(this->wref_fix_flag[i]){
+                    LHS_mapping += std::to_string(LHS_index[w][i]) + ",";
+                }
+            }
+            if(wref_fix_flag[LHS_index[w].size() - 1]){
+                LHS_mapping += std::to_string(LHS_index[w].back()) + "}));\n";
+            }
+        }
+        init_string += LHS_mapping;
+
+        std::string RHS_MAP;
+        for(int j = 0; j < read_ref_dim.size(); j++){
+            for(int subscript_ptr = read_ref_dim_tmp[j + 1] - 1; subscript_ptr >= read_ref_dim_tmp[j]; subscript_ptr--){
+                RHS_MAP+= "mapping.RHS_MAP.push_back(std::vector<int>({";
+                for(int i = 0; i < RHS_index[subscript_ptr].size() - 1; i++){
+                    RHS_MAP += std::to_string(RHS_index[subscript_ptr][i]) + ",";
+                }
+                RHS_MAP += std::to_string(RHS_index[subscript_ptr].back()) + "}));\n";
+            }
+        }
+        init_string += RHS_MAP;
+
+
+        //Inserting Bounds
+        std::string min_bound_string = "min_bound.instance.resize(" + std::to_string(this->min_bound.size()) + ");\n";
+        for(int i = 0; i < min_bound.size(); i++){
+            min_bound_string += "min_bound.instance[" +
+                    std::to_string(i) + "] = "  +
+                    std::to_string(this->min_bound[i]) + ";\n";
+        }
+        min_bound_string += "min_bound.makeValid();\n";
+        init_string += min_bound_string;
+
+        std::string max_bound_string = "max_bound.instance.resize(" + std::to_string(this->min_bound.size()) + ");\n";
+        for(int i = 0; i < max_bound.size(); i++){
+            max_bound_string += "max_bound.instance[" +
+                                std::to_string(i) + "] = "  +
+                                std::to_string(this->max_bound[i]) + ";\n";
+        }
+        max_bound_string += "max_bound.makeValid();\n";
+        init_string += max_bound_string;
+
+        //Inserting fix flags
+        std::string wref_fix_flag_string;
+        for(int i = 0; i < wref_fix_flag.size(); i++){
+            wref_fix_flag_string+= "wref_fix_flag.push_back(";
+            if(wref_fix_flag[i]){
+                wref_fix_flag_string += "false";
+            } else {
+                wref_fix_flag_string += "true";
+            }
+            wref_fix_flag_string += ");\n";
+        }
+        init_string += wref_fix_flag_string;
+
+        //Inserting read const
+        std::string read_const_string;
+        for(int j = 0; j < read_ref_dim.size(); j++){
+            for(int subscript_ptr = read_ref_dim_tmp[j + 1] - 1; subscript_ptr >= read_ref_dim_tmp[j]; subscript_ptr--){
+                read_const_string+= "read_const.push_back(" + std::to_string(read_const[subscript_ptr]) + ");\n";
+            }
+        }
+        init_string += read_const_string;
+
+        init_string += "//==========================================================\n";
+        D(std::cout << init_string;)
+        //Inserting
+        auto for_list = NodeQuery::querySubTree(this->getMainFuncDef(), V_SgForStatement);
+        SgNode* outer_loop_for_statement;
+        for(auto& for_exp_tmp: for_list){
+            auto for_exp = isSgForStatement(for_exp_tmp);
+            ROSE_ASSERT(for_exp);
+            if(isSgFunctionDefinition(for_exp->get_parent()->get_parent())){
+                outer_loop_for_statement = for_exp;
+                break;
+            }
+        }
+
+        SageInterface::addTextForUnparser(outer_loop_for_statement, init_string, AstUnparseAttribute::e_after);
+
+
+        std::string last_write_check_string = "\n//====================== Compiler stuff ===================\n";
+
+
+        for(auto& for_loop: for_loops){
+            last_write_check_string += for_loop;
+        }
+
+        //Creating the index
+        std::string write_ref_string = "{";
+        for(int subscript_ptr = LHS_index.size() - 1; subscript_ptr >= 0; subscript_ptr--){
+            auto& sub = this->LHS_index[subscript_ptr];
+            for(int inductive_ptr = 0; inductive_ptr < this->simplified_schedule_name.size(); inductive_ptr++){
+                if(sub[inductive_ptr] != 0){
+                    write_ref_string += std::to_string(sub[inductive_ptr]) + "*" + this->simplified_schedule_name[inductive_ptr] + " + ";
+                }
+            }
+            write_ref_string += std::to_string(write_const[subscript_ptr]);
+            write_ref_string+= ",";
+        }
+        write_ref_string.pop_back();
+        write_ref_string += "};";
+        last_write_check_string += "std::vector<int> wref" + write_ref_string + "\n";
+        last_write_check_string += "assert(shadow[i][j] == polyfunc::lastWriter(max_bound, wref, wref_fix_flag, mapping.LHS_MAP));\n";
+
+        last_write_check_string+="}\n}\n";
+
+        last_write_check_string += "//==========================================================\n";
+        D(std::cout << last_write_check_string << std::endl;)
+        //Inserting
+        auto return_state_list = NodeQuery::querySubTree(this->getMainFuncDef(), V_SgReturnStmt);
+        auto return_statement = isSgReturnStmt(return_state_list.front());
+        ROSE_ASSERT(return_statement);
+
+        SageInterface::addTextForUnparser(return_statement, last_write_check_string, AstUnparseAttribute::e_before);
+    }
+
+    SgFunctionCallExp *PolyCheckInstrumentation::getFuncCall() {
+        std::vector<SgNode *> func_call_list = NodeQuery::querySubTree(this->getMainFuncDef(), V_SgFunctionCallExp);
+        for(auto& func_call_tmp: func_call_list){
+            auto func_call = isSgFunctionCallExp(func_call_tmp);
+            ROSE_ASSERT(func_call);
+            return func_call;
+        }
+        return nullptr;
+    }
+
 }
