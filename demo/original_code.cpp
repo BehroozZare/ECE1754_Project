@@ -1,7 +1,5 @@
-//#include <random>
-//
-////==================== Compiler stuff ====================
-//#include "polycheck_demo_functions.h"
+#include <random>
+#include <iostream>
 
 
 #define T 2
@@ -41,8 +39,8 @@ void Original_Sidel(){
 
 
 int main() {
-    //=========================== Test Section ======================
-    //Generate some random data for Seidel
+    // =========================== Test Section ======================
+    // Generate some random data for Seidel
     std::random_device rd;
     std::mt19937 mt(rd());
     std::uniform_real_distribution<double> dist(1.0, 10.0);
@@ -56,8 +54,9 @@ int main() {
     Transformed_Sidel(0, 1, N - 1, 1, N - 1);
     for(int i = 0; i < N; i++){
         for(int j = 0; j < N; j++){
-            if(Original_A[i][j] != Transformed_A[i][j])
+            if(Original_A[i][j] != Transformed_A[i][j]){
                 std::cout << "There is a problem in testing" << std::endl;
+            }
         }
     }
    return 0;

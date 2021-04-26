@@ -2,10 +2,12 @@
 
 //==================== Compiler stuff ====================
 #include "polycheck_demo_functions.h"
+#include <chrono>
 
+using namespace std::chrono;
 
-#define T 2
-#define N 32
+#define T 3
+#define N 64
 
 
 double Original_A[N][N];
@@ -172,15 +174,35 @@ int main() {
             Instrument_A[i][j] = Original_A[i][j];
         }
     }
+    // Get starting time point
+    auto start = high_resolution_clock::now();
     Original_Seidel();
+    // Get ending timepoint
+    auto stop = high_resolution_clock::now();
+    auto duration = duration_cast<microseconds>(stop - start);
+    std::cout << "Time taken by Original_Seidel: "
+         << duration.count() << " microseconds" << std::endl;
+
+    start = high_resolution_clock::now();
     Transformed_Seidel(0, 1, N - 1, 1, N - 1);
+    stop = high_resolution_clock::now();
+    duration = duration_cast<microseconds>(stop - start);
+    std::cout << "Time taken by Transformed_Seidel: "
+              << duration.count() << " microseconds" << std::endl;
+
+    start = high_resolution_clock::now();
     Instrumented_Seidel(0, 1, N - 1, 1, N - 1);
+
     for(int i = 0; i < N; i++){
         for(int j = 0; j < N; j++){
             if(Original_A[i][j] != Transformed_A[i][j])
                 std::cout << "There is a problem in testing" << std::endl;
         }
     }
+    stop = high_resolution_clock::now();
+    duration = duration_cast<microseconds>(stop - start);
+    std::cout << "Time taken by Instrumented_Seidel: "
+              << duration.count() << " microseconds" << std::endl;
 
     //======================= Compiler stuff =======================
     //Last Writer Stuff Mapping

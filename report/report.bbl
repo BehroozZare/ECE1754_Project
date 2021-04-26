@@ -1,0 +1,33 @@
+\begin{thebibliography}{1}
+
+\bibitem{schordan2014verification}
+M.~Schordan, P.-H. Lin, D.~Quinlan, and L.-N. Pouchet, ``Verification of
+  polyhedral optimizations with constant loop bounds in finite state space
+  computations,'' in {\em International Symposium On Leveraging Applications of
+  Formal Methods, Verification and Validation}, pp.~493--508, Springer, 2014.
+
+\bibitem{bao2016polycheck}
+W.~Bao, S.~Krishnamoorthy, L.-N. Pouchet, F.~Rastello, and P.~Sadayappan,
+  ``Polycheck: Dynamic verification of iteration space transformations on
+  affine programs,'' {\em ACM SIGPLAN Notices}, vol.~51, no.~1, pp.~539--554,
+  2016.
+
+\bibitem{LOECHNER1999POLYLIB}
+V.~Loechner, ``Polylib: A library for manipulating parameterized polyhedra,''
+  1999.
+
+\bibitem{VERDOOLAEGE2010ISL}
+S.~Verdoolaege, ``isl: An integer set library for the polyhedral model,'' in
+  {\em Mathematical Software (ICMS'10)} (K.~Fukuda, J.~Hoeven, M.~Joswig, and
+  N.~Takayama, eds.), LNCS 6327, pp.~299--302, Springer-Verlag, 2010.
+
+\bibitem{quinlan2000rose}
+D.~Quinlan, ``Rose: Compiler support for object-oriented frameworks,'' {\em
+  Parallel processing letters}, vol.~10, no.~02n03, pp.~215--226, 2000.
+
+\bibitem{feautrier1992some}
+P.~Feautrier, ``Some efficient solutions to the affine scheduling problem. part
+  ii. multidimensional time,'' {\em International journal of parallel
+  programming}, vol.~21, no.~6, pp.~389--420, 1992.
+
+\end{thebibliography}

@@ -28,7 +28,6 @@ int main(int argc, char *argv[])
 //    polycheckdemo::printStatements(Project);
 //    std::cout << std::endl;
 
-
     //Lets add a dummy function to the serial code
     polycheckdemo::PolyCheckInstrumentation poly_obj(Project);
     poly_obj.startInstrumenting();
@@ -36,6 +35,5 @@ int main(int argc, char *argv[])
     std::cout << "Done ...\n";
 
     // Generate the source code
-//    Project->unparse();
     return backend(Project);
 }
